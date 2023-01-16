@@ -3,13 +3,13 @@ package config
 import (
 	"os"
 
-	"github.com/case-management-suite/common"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 type AppConfig struct {
-	LogConfig          LogConfig
+	Env                EnvType
+	API                APIConfig
 	CasesService       CasesServiceConfig
 	CasesStorage       DatabaseConfig
 	GraphQLConfig      GraphQLConfig
@@ -48,6 +48,17 @@ type QueueConnectionConfig struct {
 	LogLevel                 zerolog.Level
 }
 
+type ApiType byte
+
+const (
+	REST ApiType = iota
+	GraphQL
+)
+
+type APIConfig struct {
+	APIType ApiType
+}
+
 type CasesServiceConfig struct {
 	Host string
 	Port int16
@@ -63,16 +74,23 @@ type RulesServiceConfig struct {
 	QueueType   QueueType
 }
 
-func NewLocalAppConfig() AppConfig {
+type EnvType string
+
+var Env = struct {
+	Test  EnvType
+	Local EnvType
+	Prod  EnvType
+}{
+	Test:  EnvType("test"),
+	Local: EnvType("local"),
+	Prod:  EnvType("prod"),
+}
+
+func NewLocalAppConfigWithParams(apiType ApiType) AppConfig {
 	return AppConfig{
-		LogConfig: LogConfig{
-			Logger:        common.BuildDefaultLogger(),
-			CasesService:  zerolog.ErrorLevel,
-			CasesDB:       zerolog.ErrorLevel,
-			RulesServce:   zerolog.ErrorLevel,
-			RulesServer:   zerolog.DebugLevel,
-			QueueService:  zerolog.ErrorLevel,
-			WorkScheduler: zerolog.ErrorLevel,
+		Env: Env.Local,
+		API: APIConfig{
+			APIType: apiType,
 		},
 		CasesService: CasesServiceConfig{
 			Host: "localhost",
@@ -94,7 +112,36 @@ func NewLocalAppConfig() AppConfig {
 				CaseActionsChannel:       "case_action_channel",
 				CaseNotificationsChannel: "case_notifications_channel",
 				SendRetries:              5,
-				LogLevel:                 zerolog.ErrorLevel,
+				LogLevel:                 zerolog.DebugLevel,
+			},
+		},
+	}
+}
+
+func NewLocalAppConfig() AppConfig {
+	return AppConfig{
+		Env: Env.Local,
+		CasesService: CasesServiceConfig{
+			Host: "localhost",
+			Port: 7777,
+		},
+		CasesStorage: DatabaseConfig{
+			CreateSQL:    "create table if not exists cases(case_id INTEGER PRIMARY KEY, status TEXT);",
+			Address:      "./test_cases.db",
+			DatabaseType: Sqlite,
+			LogSQL:       false,
+		},
+		GraphQLConfig: GraphQLConfig{
+			Port: 8080,
+		},
+		RulesServiceConfig: RulesServiceConfig{
+			QueueType: RabbitMQ,
+			QueueConfig: QueueConnectionConfig{
+				Address:                  "amqp://guest:guest@0.0.0.0:5672/",
+				CaseActionsChannel:       "case_action_channel",
+				CaseNotificationsChannel: "case_notifications_channel",
+				SendRetries:              5,
+				LogLevel:                 zerolog.DebugLevel,
 			},
 		},
 	}
@@ -103,15 +150,7 @@ func NewLocalAppConfig() AppConfig {
 func NewLocalTestAppConfig() AppConfig {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	return AppConfig{
-		LogConfig: LogConfig{
-			Logger:        common.BuildDefaultLogger(),
-			CasesService:  zerolog.DebugLevel,
-			CasesDB:       zerolog.DebugLevel,
-			RulesServce:   zerolog.DebugLevel,
-			RulesServer:   zerolog.DebugLevel,
-			QueueService:  zerolog.DebugLevel,
-			WorkScheduler: zerolog.DebugLevel,
-		},
+		Env: Env.Test,
 		CasesService: CasesServiceConfig{
 			Host: "localhost",
 			Port: 7777,
